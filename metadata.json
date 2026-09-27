@@ -1,0 +1,6 @@
+{
+  "name": "EduNexus – Smart Academic ERP",
+  "description": "Centralized academic ERP connecting Principal, Teachers, and Parents with FN/AN attendance tracking, examination marks, anomaly detection, and approval workflows.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
