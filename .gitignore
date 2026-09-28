@@ -6,3 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+
+backend/src/**/*.js
+backend/src/**/*.d.ts
+backend/src/**/*.map
