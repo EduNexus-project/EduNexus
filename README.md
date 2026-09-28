@@ -101,7 +101,8 @@ EduNexus is an enterprise-grade academic ERP connecting **Principals & Administr
 │   │       └── DashboardLayout.tsx   # Persistent shell layout
 │   └── pages/
 │       ├── auth/
-│       │   └── LoginPage.tsx         # ERP portal login with 1-click demo access
+│       │   ├── LoginPage.tsx         # Direct 3-role portal login & validation
+│       │   └── RegisterPage.tsx      # 3-role registration with confirmation
 │       ├── principal/                # Principal command center (9 screens)
 │       │   ├── PrincipalDashboard.tsx
 │       │   ├── PrincipalAttendance.tsx
