@@ -8,6 +8,11 @@ export interface User {
   password_hash: string;
   role: UserRole;
   name: string;
+  avatar?: string;
+  phone?: string;
+  relationship?: 'father' | 'mother' | 'guardian';
+  studentIds?: string[];
+  studentId?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -15,14 +20,21 @@ export interface User {
 
 export interface Student {
   id: string;
+  student_code: string | null;
   name: string;
   roll_number: string;
+  section: string | null;
   class_id: string | null;
   date_of_birth: string | null;
   gender: string | null;
   email: string | null;
   phone: string | null;
+  parent_name: string | null;
+  parent_email: string | null;
+  parent_phone: string | null;
+  parent_relationship: 'father' | 'mother' | 'guardian' | null;
   address: string | null;
+  relationship?: 'father' | 'mother' | 'guardian';
   created_at: string;
   updated_at: string;
 }

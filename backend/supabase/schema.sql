@@ -15,12 +15,15 @@ CREATE TABLE users (
     password_hash VARCHAR(255) NOT NULL,
     role VARCHAR(20) NOT NULL CHECK (role IN ('PRINCIPAL', 'TEACHER', 'PARENT')),
     name VARCHAR(255) NOT NULL,
+    avatar TEXT,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_role ON users(role);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;
 
 -- ============================================
 -- 2. CLASSES
@@ -48,19 +51,26 @@ CREATE TABLE subjects (
 -- ============================================
 CREATE TABLE students (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    student_code VARCHAR(50) UNIQUE,
     name VARCHAR(255) NOT NULL,
     roll_number VARCHAR(50) UNIQUE NOT NULL,
+    section VARCHAR(20),
     class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
     date_of_birth DATE,
     gender VARCHAR(10),
     email VARCHAR(255),
     phone VARCHAR(50),
     address TEXT,
+    parent_name VARCHAR(255),
+    parent_email VARCHAR(255),
+    parent_phone VARCHAR(50),
+    parent_relationship VARCHAR(20) CHECK (parent_relationship IN ('father', 'mother', 'guardian')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_students_class ON students(class_id);
 CREATE INDEX idx_students_roll ON students(roll_number);
+CREATE INDEX idx_students_parent_email ON students(parent_email);
 
 -- ============================================
 -- 5. TEACHERS (linked to users)
@@ -86,12 +96,23 @@ CREATE TABLE parents (
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     phone VARCHAR(50),
+    relationship VARCHAR(20) CHECK (relationship IN ('father', 'mother', 'guardian')),
     occupation VARCHAR(100),
     address TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_parents_user ON parents(user_id);
+
+ALTER TABLE students ADD COLUMN IF NOT EXISTS student_code VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS section VARCHAR(20);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_email VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_phone VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_relationship VARCHAR(20);
+ALTER TABLE parents ADD COLUMN IF NOT EXISTS relationship VARCHAR(20);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_code ON students(student_code) WHERE student_code IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_students_parent_email ON students(parent_email);
 
 -- ============================================
 -- 7. STUDENT-PARENT RELATIONSHIP (M:N)

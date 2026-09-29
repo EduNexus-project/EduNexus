@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../types';
 import { dbStore } from '../services/dbStore';
 import { createAuditLog } from '../utils/auditLogger';
+import { getParentStudentIds } from '../services/parentRelationships';
 
 // Helper to compute AI safety assessment if omitted
 export function computeAISafetyAssessment(reason: string, requestType: string) {
@@ -45,12 +47,19 @@ export function computeAISafetyAssessment(reason: string, requestType: string) {
 }
 
 // GET /api/requests
-export const getRequests = async (req: Request, res: Response) => {
+export const getRequests = async (req: AuthRequest, res: Response) => {
   try {
     const { teacherId, status } = req.query;
     let requests = dbStore.requests;
 
-    if (teacherId) requests = requests.filter(r => r.teacherId === teacherId);
+    if (req.user?.role === 'PARENT') {
+      const linkedIds = await getParentStudentIds(req.user.id, req.user.email);
+      requests = requests.filter((request) => linkedIds.includes(request.studentId));
+    } else if (req.user?.role === 'TEACHER') {
+      requests = requests.filter((request) => request.teacherId === req.user?.id);
+    } else if (teacherId) {
+      requests = requests.filter(r => r.teacherId === teacherId);
+    }
     if (status) requests = requests.filter(r => r.status === status);
 
     res.json({
@@ -64,7 +73,7 @@ export const getRequests = async (req: Request, res: Response) => {
 };
 
 // POST /api/requests
-export const createRequest = async (req: Request, res: Response) => {
+export const createRequest = async (req: AuthRequest, res: Response) => {
   try {
     const body = req.body;
     const {
@@ -92,8 +101,8 @@ export const createRequest = async (req: Request, res: Response) => {
     const newReq = {
       id: body.id || `req_${Date.now()}`,
       requestType: requestType || 'attendance_correction',
-      teacherId: teacherId || 'usr_teacher_01',
-      teacherName: teacherName || 'Prof. Anitha Vasudevan',
+      teacherId: req.user?.id || teacherId || 'unknown',
+      teacherName: req.user?.name || teacherName || 'Faculty member',
       studentId,
       studentName: studentName || 'Student',
       rollNumber: rollNumber || '21CS101',
@@ -141,7 +150,7 @@ export const createRequest = async (req: Request, res: Response) => {
 };
 
 // PATCH /api/requests/:id/review
-export const reviewRequest = async (req: Request, res: Response) => {
+export const reviewRequest = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { status, reviewerName, remarks } = req.body;
@@ -163,7 +172,7 @@ export const reviewRequest = async (req: Request, res: Response) => {
       dateStyle: 'medium',
       timeStyle: 'short',
     });
-    request.reviewedBy = reviewerName || 'Dr. Ramesh Sundaram (Principal)';
+    request.reviewedBy = req.user?.name || reviewerName || 'Authorized reviewer';
     request.reviewRemarks =
       remarks ||
       (status === 'approved' ? 'Digitally authorized by Principal' : 'Rejected after administrative review');

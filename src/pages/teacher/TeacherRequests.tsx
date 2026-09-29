@@ -44,8 +44,8 @@ export const TeacherRequests: React.FC<{ initialStudent?: Student | null }> = ({
 
     submitModificationRequest({
       requestType,
-      teacherId: currentUser?.id || 'usr_teacher_01',
-      teacherName: currentUser?.name || 'Prof. Anitha Vasudevan',
+      teacherId: currentUser?.id || '',
+      teacherName: currentUser?.name || 'Current user',
       studentId: student.id,
       studentName: student.name,
       rollNumber: student.rollNumber,
@@ -304,7 +304,7 @@ export const TeacherRequests: React.FC<{ initialStudent?: Student | null }> = ({
               </span>
               <p className="leading-relaxed text-[11px]">
                 Estimated Safety Index: <strong>{reason.toLowerCase().includes('duty') ? '94% (Safe)' : '88% (Safe)'}</strong>.
-                Low risk of grade tampering. Endorsement will be submitted directly to Principal Dr. Ramesh Sundaram.
+                Low risk of grade tampering. Endorsement will be submitted directly to the Principal.
               </p>
             </div>
 

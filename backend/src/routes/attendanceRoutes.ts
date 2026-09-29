@@ -7,15 +7,16 @@ import {
   bulkMarkAttendance,
   detectSessionSkippers,
 } from '../controllers/attendanceController';
-import { optionalProtect } from '../middleware/authMiddleware';
+import { protect } from '../middleware/authMiddleware';
+import { authorizeRoles } from '../middleware/roleMiddleware';
 
 const router = Router();
 
-router.get('/', optionalProtect, getAttendance);
-router.get('/student/:studentId', optionalProtect, getStudentAttendance);
-router.get('/stats/:studentId', optionalProtect, getStudentStats);
-router.post('/mark', optionalProtect, markAttendance);
-router.post('/bulk', optionalProtect, bulkMarkAttendance);
-router.get('/skippers', optionalProtect, detectSessionSkippers);
+router.get('/', protect, getAttendance);
+router.get('/student/:studentId', protect, getStudentAttendance);
+router.get('/stats/:studentId', protect, getStudentStats);
+router.post('/mark', protect, authorizeRoles('PRINCIPAL', 'TEACHER'), markAttendance);
+router.post('/bulk', protect, authorizeRoles('PRINCIPAL', 'TEACHER'), bulkMarkAttendance);
+router.get('/skippers', protect, authorizeRoles('PRINCIPAL', 'TEACHER'), detectSessionSkippers);
 
 export default router;

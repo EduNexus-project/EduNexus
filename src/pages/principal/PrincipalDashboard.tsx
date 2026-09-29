@@ -55,7 +55,7 @@ export const PrincipalDashboard: React.FC<{ onNavigateTab: (tab: string) => void
     reviewModificationRequest(
       selectedRequestToReview.request.id,
       selectedRequestToReview.action,
-      currentUser?.name || 'Dr. Ramesh Sundaram',
+      currentUser?.name || 'Current user',
       remarks
     );
     setSelectedRequestToReview(null);

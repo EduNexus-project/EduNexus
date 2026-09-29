@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useERPData } from '../../context/ERPDataContext';
-import { useAuth } from '../../context/AuthContext';
 import { aiService } from '../../services/aiService';
 import { KPICard } from '../../components/common/KPICard';
 import { AIProgressSummary } from '../../components/ai/AIProgressSummary';
+import { ParentStudentUnavailable } from './ParentStudentUnavailable';
+import { StudentMarkReport } from '../../types';
+import { parentService } from '../../services/parentService';
 import {
   CalendarCheck2,
   Award,
@@ -19,13 +21,32 @@ import {
 export const ParentDashboard: React.FC<{ onNavigateTab: (tab: string) => void }> = ({
   onNavigateTab
 }) => {
-  const { currentUser } = useAuth();
-  const { students, getStudentMarkReport, selectedDate } = useERPData();
+  const { students, classes, selectedDate, selectedParentStudentId, parentStudentsLoading } = useERPData();
 
-  // Find linked student (Aarav Kumar)
-  const myStudent = students.find((s) => s.id === currentUser?.studentId) || students[0];
-  const markReport = getStudentMarkReport(myStudent.id);
+  const myStudent = students.find((student) => student.id === selectedParentStudentId) ||
+    (students.length === 1 ? students[0] : undefined);
+  const [markReportState, setMarkReportState] = useState<{ studentId: string; report: StudentMarkReport } | null>(null);
+  const markReport = markReportState && markReportState.studentId === myStudent?.id ? markReportState.report : undefined;
+
+  useEffect(() => {
+    if (!myStudent) {
+      setMarkReportState(null);
+      return;
+    }
+    let active = true;
+    setMarkReportState(null);
+    parentService.getMarks(myStudent.id)
+      .then((report) => { if (active) setMarkReportState({ studentId: myStudent.id, report }); })
+      .catch(() => { if (active) setMarkReportState(null); });
+    return () => { active = false; };
+  }, [myStudent?.id]);
+
+  if (!myStudent) {
+    return <ParentStudentUnavailable loading={parentStudentsLoading} />;
+  }
+
   const digest = aiService.generateParentDigest(myStudent, markReport);
+  const mentorName = classes.find((academicClass) => academicClass.id === myStudent.classId)?.classTeacherName;
 
   const hasAfternoonDrop = myStudent.fnAttendanceRate > myStudent.anAttendanceRate + 10;
 
@@ -41,7 +62,7 @@ export const ParentDashboard: React.FC<{ onNavigateTab: (tab: string) => void }>
             Ward Overview: {myStudent.name}
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            {myStudent.className} • Roll No: {myStudent.rollNumber} • Mentor: Prof. Anitha Vasudevan
+            {myStudent.className} • Roll No: {myStudent.rollNumber} • Mentor: {mentorName || 'Assigned faculty'}
           </p>
         </div>
 

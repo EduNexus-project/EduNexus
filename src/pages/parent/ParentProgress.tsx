@@ -1,27 +1,55 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useERPData } from '../../context/ERPDataContext';
-import { useAuth } from '../../context/AuthContext';
 import { aiService } from '../../services/aiService';
 import { AIProgressSummary } from '../../components/ai/AIProgressSummary';
 import { useToast } from '../../context/ToastContext';
 import { Sparkles, MessageSquare, CheckCircle2, ShieldCheck, HeartHandshake } from 'lucide-react';
+import { ParentStudentUnavailable } from './ParentStudentUnavailable';
+import { StudentMarkReport } from '../../types';
+import { parentService } from '../../services/parentService';
 
 export const ParentProgress: React.FC = () => {
-  const { currentUser } = useAuth();
-  const { students, getStudentMarkReport } = useERPData();
+  const { students, classes, selectedParentStudentId, parentStudentsLoading } = useERPData();
   const { success } = useToast();
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  const myStudent = students.find((s) => s.id === currentUser?.studentId) || students[0];
-  const markReport = getStudentMarkReport(myStudent.id);
-  const [digest, setDigest] = useState(() => aiService.generateParentDigest(myStudent, markReport));
+  const myStudent = students.find((student) => student.id === selectedParentStudentId) ||
+    (students.length === 1 ? students[0] : undefined);
+  const mentorName = myStudent
+    ? classes.find((academicClass) => academicClass.id === myStudent.classId)?.classTeacherName
+    : undefined;
+  const [markReportState, setMarkReportState] = useState<{ studentId: string; report: StudentMarkReport } | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [digestState, setDigestState] = useState<{
+    studentId: string;
+    digest: ReturnType<typeof aiService.generateParentDigest>;
+  } | null>(null);
+  const markReport = markReportState && markReportState.studentId === myStudent?.id ? markReportState.report : undefined;
+  const digest = digestState && digestState.studentId === myStudent?.id ? digestState.digest : null;
+
+  useEffect(() => {
+    if (!myStudent) return;
+    let active = true;
+    setMarkReportState(null);
+    setDigestState(null);
+    setLoadError('');
+    parentService.getMarks(myStudent.id)
+      .then((studentReport) => {
+        if (!active) return;
+        setMarkReportState({ studentId: myStudent.id, report: studentReport });
+        setDigestState({ studentId: myStudent.id, digest: aiService.generateParentDigest(myStudent, studentReport) });
+      })
+      .catch((error: Error) => { if (active) setLoadError(error.message); });
+    return () => { active = false; };
+  }, [myStudent?.id]);
 
   const handleRegenerate = () => {
+    if (!myStudent) return;
     setIsRegenerating(true);
     setTimeout(() => {
       const fresh = aiService.generateParentDigest(myStudent, markReport);
-      setDigest(fresh);
+      setDigestState({ studentId: myStudent.id, digest: fresh });
       setIsRegenerating(false);
       success('Cognitive Digest Regenerated', 'Updated plain-language synthesis from latest attendance ledgers.');
     }, 600);
@@ -29,8 +57,17 @@ export const ParentProgress: React.FC = () => {
 
   const handleAcknowledge = () => {
     setAcknowledged(true);
-    success('Digest Acknowledged', 'Recorded guardian digital acknowledgment for class incharge Prof. Anitha.');
+    success('Digest Acknowledged', `Recorded guardian acknowledgment${mentorName ? ` for ${mentorName}` : ''}.`);
   };
+
+  if (!myStudent) {
+    return <ParentStudentUnavailable loading={parentStudentsLoading} />;
+  }
+  if (!digest) {
+    return <div role={loadError ? 'alert' : 'status'} className="py-12 text-center text-xs text-slate-500">
+      {loadError || 'Loading linked student progress...'}
+    </div>;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">

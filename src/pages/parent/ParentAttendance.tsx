@@ -1,14 +1,35 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useERPData } from '../../context/ERPDataContext';
-import { useAuth } from '../../context/AuthContext';
-import { attendanceService } from '../../services/attendanceService';
+import { AttendanceRecord } from '../../types';
+import { parentService } from '../../services/parentService';
 import { CalendarCheck2, Clock, CheckCircle2, XCircle, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { ParentStudentUnavailable } from './ParentStudentUnavailable';
 
 export const ParentAttendance: React.FC = () => {
-  const { currentUser } = useAuth();
-  const { students } = useERPData();
-  const myStudent = students.find((s) => s.id === currentUser?.studentId) || students[0];
-  const records = attendanceService.getStudentRecords(myStudent.id);
+  const { students, selectedParentStudentId, parentStudentsLoading } = useERPData();
+  const myStudent = students.find((student) => student.id === selectedParentStudentId) ||
+    (students.length === 1 ? students[0] : undefined);
+  const [recordSet, setRecordSet] = useState<{ studentId: string; records: AttendanceRecord[] } | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const records = recordSet && recordSet.studentId === myStudent?.id ? recordSet.records : [];
+
+  useEffect(() => {
+    if (!myStudent) {
+      setRecordSet(null);
+      return;
+    }
+    let active = true;
+    setRecordSet(null);
+    setLoadError('');
+    parentService.getAttendance(myStudent.id)
+      .then((studentRecords) => { if (active) setRecordSet({ studentId: myStudent.id, records: studentRecords }); })
+      .catch((error: Error) => { if (active) setLoadError(error.message); });
+    return () => { active = false; };
+  }, [myStudent?.id]);
+
+  if (!myStudent) {
+    return <ParentStudentUnavailable loading={parentStudentsLoading} />;
+  }
 
   // Group records by date
   const dateMap: Record<string, { FN?: string; AN?: string }> = {};
@@ -68,6 +89,7 @@ export const ParentAttendance: React.FC = () => {
         </div>
 
         <div className="divide-y divide-slate-100 text-xs">
+          {loadError && <p role="alert" className="p-4 text-rose-600">{loadError}</p>}
           {sortedDates.map((date) => {
             const dayData = dateMap[date];
             const fnStatus = dayData?.FN || 'present';

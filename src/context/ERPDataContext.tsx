@@ -17,8 +17,10 @@ import { attendanceService } from '../services/attendanceService';
 import { aiService } from '../services/aiService';
 import { requestService } from '../services/requestService';
 import { notificationService } from '../services/notificationService';
+import { authService } from '../services/authService';
 import { CAMPUS_BLOCKS } from '../data/mockData';
 import { useToast } from './ToastContext';
+import { useAuth } from './AuthContext';
 
 interface ERPDataContextType {
   students: Student[];
@@ -29,6 +31,9 @@ interface ERPDataContextType {
   campusBlocks: CampusBlockHeatmap[];
   selectedDate: string;
   setSelectedDate: (date: string) => void;
+  selectedParentStudentId: string | null;
+  setSelectedParentStudentId: (studentId: string | null) => void;
+  parentStudentsLoading: boolean;
   // Mutations
   markAttendance: (studentId: string, date: string, session: SessionType, status: AttendanceStatus) => void;
   bulkMarkAttendance: (studentIds: string[], date: string, session: SessionType, status: AttendanceStatus) => void;
@@ -59,23 +64,35 @@ const ERPDataContext = createContext<ERPDataContextType | undefined>(undefined);
 
 export const ERPDataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { success, info } = useToast();
+  const { currentUser } = useAuth();
   const [selectedDate, setSelectedDate] = useState<string>('2026-09-28');
   const [students, setStudents] = useState<Student[]>([]);
+  const [studentsOwnerId, setStudentsOwnerId] = useState<string | null>(null);
+  const [requestsOwnerId, setRequestsOwnerId] = useState<string | null>(null);
+  const [selectedParentStudentId, setSelectedParentStudentId] = useState<string | null>(null);
   const [classes, setClasses] = useState<AcademicClass[]>([]);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [anomalies, setAnomalies] = useState<Anomaly[]>([]);
   const [requests, setRequests] = useState<ModificationRequest[]>([]);
   const [campusBlocks, setCampusBlocks] = useState<CampusBlockHeatmap[]>(CAMPUS_BLOCKS);
 
+  const parentStudentsLoading = currentUser?.role === 'parent' && studentsOwnerId !== currentUser.id;
+  const visibleStudents = parentStudentsLoading ? [] : students;
+  const requestsLoading = Boolean(currentUser && requestsOwnerId !== currentUser.id);
+  const visibleRequests = requestsLoading ? [] : requests;
+
   const refreshData = useCallback(async () => {
-    // 1. Fetch live from Express REST API
     try {
+      const headers = authService.getAuthHeaders();
       const [studentsRes, classesRes, requestsRes, anomaliesRes] = await Promise.all([
-        fetch('/api/academic/students'),
-        fetch('/api/academic/classes'),
-        fetch('/api/requests'),
-        fetch('/api/anomalies')
+        fetch('/api/academic/students', { headers }),
+        fetch('/api/academic/classes', { headers }),
+        fetch('/api/requests', { headers }),
+        fetch('/api/anomalies', { headers })
       ]);
+      if (!studentsRes.ok || !classesRes.ok || !requestsRes.ok || !anomaliesRes.ok) {
+        throw new Error('Unable to load ERP data');
+      }
 
       const [studentsData, classesData, requestsData, anomaliesData] = await Promise.all([
         studentsRes.json(),
@@ -86,18 +103,27 @@ export const ERPDataProvider: React.FC<{ children: ReactNode }> = ({ children })
 
       if (studentsData.success && Array.isArray(studentsData.data?.students)) {
         setStudents(studentsData.data.students);
+        setStudentsOwnerId(currentUser?.id || null);
       }
       if (classesData.success && Array.isArray(classesData.data?.classes)) {
         setClasses(classesData.data.classes);
       }
       if (requestsData.success && Array.isArray(requestsData.data?.requests)) {
         setRequests(requestsData.data.requests);
+        setRequestsOwnerId(currentUser?.id || null);
       }
       if (anomaliesData.success && Array.isArray(anomaliesData.data?.anomalies)) {
         setAnomalies(anomaliesData.data.anomalies);
       }
     } catch (err) {
-      // 2. Fallback to local services
+      if (currentUser?.role === 'parent') {
+        setStudents([]);
+        setRequests([]);
+        setStudentsOwnerId(currentUser.id);
+        setRequestsOwnerId(currentUser.id);
+        return;
+      }
+
       const rawStudents = academicService.getStudents();
       const enrichedStudents = rawStudents.map((s) => {
         const stats = attendanceService.getStudentStats(s.id);
@@ -114,14 +140,31 @@ export const ERPDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       setTeachers(academicService.getTeachers());
       setAnomalies(aiService.getAllAnomalies());
       setRequests(requestService.getAllRequests());
+      setStudentsOwnerId(currentUser?.id || null);
+      setRequestsOwnerId(currentUser?.id || null);
     }
 
     setTeachers(academicService.getTeachers());
-  }, []);
+  }, [currentUser?.id, currentUser?.role]);
 
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  const visibleStudentIds = visibleStudents.map((student) => student.id).join('|');
+  useEffect(() => {
+    if (currentUser?.role !== 'parent') {
+      setSelectedParentStudentId(null);
+      return;
+    }
+    if (!parentStudentsLoading) {
+      setSelectedParentStudentId((selectedId) =>
+        selectedId && visibleStudents.some((student) => student.id === selectedId)
+          ? selectedId
+          : visibleStudents[0]?.id || null
+      );
+    }
+  }, [currentUser?.id, currentUser?.role, parentStudentsLoading, visibleStudentIds]);
 
   const markAttendance = (
     studentId: string,
@@ -290,14 +333,17 @@ export const ERPDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   return (
     <ERPDataContext.Provider
       value={{
-        students,
+        students: visibleStudents,
         classes,
         teachers,
         anomalies,
-        requests,
+        requests: visibleRequests,
         campusBlocks,
         selectedDate,
         setSelectedDate,
+        selectedParentStudentId,
+        setSelectedParentStudentId,
+        parentStudentsLoading,
         markAttendance,
         bulkMarkAttendance,
         submitModificationRequest,

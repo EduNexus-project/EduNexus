@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 import authRoutes from "./routes/authRoutes";
+import userRoutes from "./routes/userRoutes";
 import academicRoutes from "./routes/academicRoutes";
 import attendanceRoutes from "./routes/attendanceRoutes";
 import requestRoutes from "./routes/requestRoutes";
@@ -26,7 +27,8 @@ import {
   updateSubjectMark,
 } from "./controllers/academicController";
 import { errorHandler } from "./middleware/errorMiddleware";
-import { optionalProtect } from "./middleware/authMiddleware";
+import { optionalProtect, protect } from "./middleware/authMiddleware";
+import { authorizeRoles } from "./middleware/roleMiddleware";
 
 dotenv.config();
 
@@ -61,6 +63,7 @@ app.get("/api/health", (_req, res) => {
 
 // Primary REST APIs
 app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/academic", academicRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/requests", requestRoutes);
@@ -75,11 +78,11 @@ app.get("/api/classes", optionalProtect, getClasses);
 app.get("/api/classes/:id", optionalProtect, getClassById);
 
 // Students
-app.get("/api/students", optionalProtect, getStudents);
-app.get("/api/students/:id", optionalProtect, getStudentById);
-app.post("/api/students", optionalProtect, createStudent);
-app.put("/api/students/:id", optionalProtect, updateStudent);
-app.delete("/api/students/:id", optionalProtect, deleteStudent);
+app.get("/api/students", protect, getStudents);
+app.get("/api/students/:id", protect, getStudentById);
+app.post("/api/students", protect, authorizeRoles('PRINCIPAL'), createStudent);
+app.put("/api/students/:id", protect, authorizeRoles('PRINCIPAL'), updateStudent);
+app.delete("/api/students/:id", protect, authorizeRoles('PRINCIPAL'), deleteStudent);
 
 // Teachers
 app.get("/api/teachers", optionalProtect, getTeachers);
@@ -87,11 +90,11 @@ app.get("/api/teachers/:id", optionalProtect, getTeacherById);
 app.get("/api/teachers/:id/classes", optionalProtect, getTeacherClasses);
 
 // Parents
-app.get("/api/parents", optionalProtect, getParents);
+app.get("/api/parents", protect, authorizeRoles('PRINCIPAL'), getParents);
 
 // Marks
-app.get("/api/marks/:studentId", optionalProtect, getMarksByStudent);
-app.put("/api/marks/:studentId", optionalProtect, updateSubjectMark);
+app.get("/api/marks/:studentId", protect, getMarksByStudent);
+app.put("/api/marks/:studentId", protect, authorizeRoles('PRINCIPAL', 'TEACHER'), updateSubjectMark);
 
 // Campus 3D & Analytics
 app.get("/api/campus/blocks", optionalProtect, getCampusBlocks);

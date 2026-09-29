@@ -20,7 +20,7 @@ if (isSupabaseConfigured) {
     client = createClient(supabaseUrl!, supabaseServiceRoleKey!, {
       auth: { persistSession: false },
     });
-    console.log("[EduNexus DB] Connected to Supabase PostgreSQL at:", supabaseUrl);
+    console.log("[EduNexus DB] Connected to Supabase PostgreSQL.");
   } catch (err: any) {
     console.warn("[EduNexus DB] Warning: Failed to initialize Supabase client:", err.message);
     client = null;

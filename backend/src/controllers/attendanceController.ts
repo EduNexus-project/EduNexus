@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { dbStore } from '../services/dbStore';
 import { createAuditLog } from '../utils/auditLogger';
+import { AuthRequest } from '../types';
+import { getParentStudentIds, parentCanAccessStudent } from '../services/parentRelationships';
 
 // Helper to compute student stats
 export function computeStudentAttendanceStats(studentId: string) {
@@ -62,10 +64,18 @@ function syncStudentRates(studentId: string) {
 }
 
 // GET /api/attendance
-export const getAttendance = async (req: Request, res: Response) => {
+export const getAttendance = async (req: AuthRequest, res: Response) => {
   try {
     const { date, studentId, session } = req.query;
     let records = dbStore.attendance;
+
+    if (req.user?.role === 'PARENT') {
+      const linkedIds = await getParentStudentIds(req.user.id, req.user.email);
+      if (studentId && !linkedIds.includes(String(studentId))) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+      records = records.filter((record) => linkedIds.includes(record.studentId));
+    }
 
     if (date) records = records.filter(r => r.date === date);
     if (studentId) records = records.filter(r => r.studentId === studentId);
@@ -82,9 +92,13 @@ export const getAttendance = async (req: Request, res: Response) => {
 };
 
 // GET /api/attendance/student/:studentId
-export const getStudentAttendance = async (req: Request, res: Response) => {
+export const getStudentAttendance = async (req: AuthRequest, res: Response) => {
   try {
     const studentId = req.params.studentId as string;
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!(await parentCanAccessStudent(req, studentId))) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
     const records = dbStore.attendance.filter(r => r.studentId === studentId);
     const stats = computeStudentAttendanceStats(studentId);
     res.json({
@@ -100,9 +114,13 @@ export const getStudentAttendance = async (req: Request, res: Response) => {
 };
 
 // GET /api/attendance/stats/:studentId
-export const getStudentStats = async (req: Request, res: Response) => {
+export const getStudentStats = async (req: AuthRequest, res: Response) => {
   try {
     const studentId = req.params.studentId as string;
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!(await parentCanAccessStudent(req, studentId))) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
     const stats = computeStudentAttendanceStats(studentId);
     res.json({ success: true, data: stats });
   } catch (err: any) {

@@ -5,21 +5,25 @@ import { generateToken } from '../middleware/authMiddleware';
 import { AuthRequest } from '../types';
 import { dbStore } from '../services/dbStore';
 import { createAuditLog } from '../utils/auditLogger';
+import { getParentStudentIds } from '../services/parentRelationships';
 
 // Helper to format user for frontend
-function formatUserResponse(user: any, profile?: any) {
+function formatUserResponse(user: any, profile?: any, linkedStudentIds?: string[]) {
   const roleLower = (user.role || '').toLowerCase();
+  const studentIds = linkedStudentIds || profile?.studentIds || (profile?.studentId ? [profile.studentId] : []);
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role: roleLower,
+    avatar: user.avatar || undefined,
     department: profile?.department || (roleLower === 'principal' ? 'Administrative Directorate' : 'Computer Science & Engineering'),
     designation: profile?.qualification || profile?.occupation || (roleLower === 'principal' ? 'Principal & Dean of Academics' : roleLower === 'teacher' ? 'Associate Professor & Class Incharge' : 'Parent / Guardian'),
-    phone: profile?.phone || '+91 98410 11223',
-    avatar: profile?.avatar || (roleLower === 'principal' ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80' : roleLower === 'teacher' ? 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80' : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'),
-    studentId: profile?.studentId || (roleLower === 'parent' ? 'std_01' : undefined),
-    studentName: profile?.studentName || (roleLower === 'parent' ? 'Aarav Kumar' : undefined),
+    phone: profile?.phone || user.phone || undefined,
+    relationship: profile?.relationship || user.relationship || undefined,
+    studentIds,
+    studentId: studentIds[0] || profile?.student_id || undefined,
+    studentName: profile?.studentName || profile?.student_name || undefined,
   };
 }
 
@@ -27,30 +31,31 @@ function formatUserResponse(user: any, profile?: any) {
 export const login = async (req: Request, res: Response) => {
   try {
     const { email, password, role } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedRole = typeof role === 'string' ? role.trim().toUpperCase() : '';
 
-    if (!email && !role) {
-      return res.status(400).json({ success: false, message: 'Email or role is required' });
+    if (!normalizedEmail || typeof password !== 'string' || !password || !normalizedRole) {
+      return res.status(400).json({ success: false, message: 'Email, password, and role are required' });
+    }
+
+    if (!['PRINCIPAL', 'TEACHER', 'PARENT'].includes(normalizedRole)) {
+      return res.status(400).json({ success: false, message: 'Role must be PRINCIPAL, TEACHER, or PARENT' });
     }
 
     let user: any = null;
     let profile: any = null;
 
     if (isSupabaseConfigured && supabase) {
-      const query = supabase.from('users').select('*');
-      if (email) {
-        query.eq('email', email.toLowerCase().trim());
-      } else if (role) {
-        query.eq('role', role.toUpperCase());
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+      if (error) {
+        return res.status(500).json({ success: false, message: 'Unable to verify credentials' });
       }
-      const { data, error } = await query.single();
-      if (!error && data) {
-        user = data;
-        if (password && user.password_hash) {
-          const isMatch = await bcrypt.compare(password, user.password_hash);
-          if (!isMatch && password !== 'nexus@2026' && password !== 'teacher@2026' && password !== 'parent@2026') {
-            return res.status(401).json({ success: false, message: 'Invalid password credentials' });
-          }
-        }
+      user = data;
+      if (user) {
         if (user.role === 'TEACHER') {
           const { data: p } = await supabase.from('teachers').select('*').eq('user_id', user.id).single();
           profile = p;
@@ -59,39 +64,26 @@ export const login = async (req: Request, res: Response) => {
           profile = p;
         }
       }
-    }
+    } else {
+      user = dbStore.users.find(u => u.email.toLowerCase() === normalizedEmail);
 
-    // Fallback to integrated in-memory ERP database
-    if (!user) {
-      const targetEmail = email ? email.toLowerCase().trim() : null;
-      const targetRole = role ? role.toUpperCase() : null;
-
-      user = dbStore.users.find(u => {
-        if (targetEmail && u.email.toLowerCase() === targetEmail) return true;
-        if (targetRole && u.role.toUpperCase() === targetRole) return true;
-        return false;
-      });
-
-      if (!user && targetRole) {
-        user = dbStore.users.find(u => u.role.toUpperCase() === targetRole);
-      }
-
-      if (!user) {
-        return res.status(401).json({ success: false, message: 'Invalid credentials or user not found' });
-      }
-
-      if (password && user.password_hash) {
-        const isMatch = await bcrypt.compare(password, user.password_hash);
-        if (!isMatch && password !== 'nexus@2026' && password !== 'teacher@2026' && password !== 'parent@2026') {
-          return res.status(401).json({ success: false, message: 'Invalid password' });
+      if (user) {
+        if (user.role === 'TEACHER') {
+          profile = dbStore.teachers.find(t => t.user_id === user.id || t.id === user.id);
+        } else if (user.role === 'PARENT') {
+          profile = dbStore.parents.find(p => p.user_id === user.id || p.id === user.id);
         }
       }
+    }
 
-      if (user.role === 'TEACHER') {
-        profile = dbStore.teachers.find(t => t.user_id === user.id || t.id === user.id);
-      } else if (user.role === 'PARENT') {
-        profile = dbStore.parents.find(p => p.user_id === user.id || p.id === user.id);
-      }
+    if (
+      !user ||
+      user.role.toUpperCase() !== normalizedRole ||
+      user.is_active === false ||
+      !user.password_hash ||
+      !(await bcrypt.compare(password, user.password_hash))
+    ) {
+      return res.status(401).json({ success: false, message: 'Invalid email, password, or role' });
     }
 
     const token = generateToken({
@@ -101,7 +93,9 @@ export const login = async (req: Request, res: Response) => {
       name: user.name,
     });
 
-    const formattedUser = formatUserResponse(user, profile);
+    const linkedStudentIds = user.role.toUpperCase() === 'PARENT'
+      ? await getParentStudentIds(user.id, user.email)
+      : undefined;
 
     await createAuditLog({
       user_id: user.id,
@@ -117,7 +111,7 @@ export const login = async (req: Request, res: Response) => {
       message: 'Login successful',
       data: {
         token,
-        user: formattedUser,
+        user: formatUserResponse(user, profile, linkedStudentIds),
         profile,
       },
     });
@@ -175,43 +169,146 @@ export const getMe = async (req: AuthRequest, res: Response) => {
 // POST /api/auth/register
 export const register = async (req: Request, res: Response) => {
   try {
-    const { email, password, role, name } = req.body;
-    if (!email || !password || !role || !name) {
+    const { email, password, role, name, phone, relationship } = req.body;
+    const normalizedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    const normalizedName = typeof name === 'string' ? name.trim() : '';
+    const normalizedRole = typeof role === 'string' ? role.trim().toUpperCase() : '';
+
+    if (!normalizedEmail || typeof password !== 'string' || !password || !normalizedRole || !normalizedName) {
       return res.status(400).json({ success: false, message: 'All fields (email, password, role, name) are required' });
     }
 
-    const upperRole = role.toUpperCase();
-    if (!['PRINCIPAL', 'TEACHER', 'PARENT'].includes(upperRole)) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ success: false, message: 'A valid email address is required' });
+    }
+
+    if (!['PRINCIPAL', 'TEACHER', 'PARENT'].includes(normalizedRole)) {
       return res.status(400).json({ success: false, message: 'Role must be PRINCIPAL, TEACHER, or PARENT' });
     }
 
-    const existing = dbStore.users.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
-    if (existing) {
-      return res.status(409).json({ success: false, message: 'User with this email already exists' });
+    const normalizedPhone = typeof phone === 'string' ? phone.trim() : '';
+    const normalizedRelationship = typeof relationship === 'string' ? relationship.trim().toLowerCase() : '';
+    if (normalizedRole === 'PARENT' && (!normalizedPhone || !['father', 'mother', 'guardian'].includes(normalizedRelationship))) {
+      return res.status(400).json({ success: false, message: 'Parent phone and relationship are required' });
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      const { data: existing, error } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', normalizedEmail)
+        .maybeSingle();
+      if (error) {
+        return res.status(500).json({ success: false, message: 'Unable to verify email availability' });
+      }
+      if (existing) {
+        return res.status(409).json({ success: false, message: 'An account with this email already exists' });
+      }
+    } else if (dbStore.users.some(u => u.email.toLowerCase() === normalizedEmail)) {
+      return res.status(409).json({ success: false, message: 'An account with this email already exists' });
     }
 
     const salt = await bcrypt.genSalt(10);
     const password_hash = await bcrypt.hash(password, salt);
-    const newUser = {
-      id: `usr_${Date.now()}`,
-      email: email.toLowerCase().trim(),
-      password_hash,
-      role: upperRole as any,
-      name,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    dbStore.users.push(newUser);
+    let newUser: any;
 
     if (isSupabaseConfigured && supabase) {
-      await supabase.from('users').insert([newUser]).select();
+      const { data, error } = await supabase
+        .from('users')
+        .insert({
+          email: normalizedEmail,
+          password_hash,
+          role: normalizedRole,
+          name: normalizedName,
+          is_active: true
+        })
+        .select('*')
+        .single();
+      if (error) {
+        if (error.code === '23505') {
+          return res.status(409).json({ success: false, message: 'An account with this email already exists' });
+        }
+        return res.status(500).json({ success: false, message: 'Unable to create the account' });
+      }
+      newUser = data;
+    } else {
+      if (dbStore.users.some(u => u.email.toLowerCase() === normalizedEmail)) {
+        return res.status(409).json({ success: false, message: 'An account with this email already exists' });
+      }
+      newUser = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        email: normalizedEmail,
+        password_hash,
+        role: normalizedRole as any,
+        name: normalizedName,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      dbStore.users.push(newUser);
     }
+
+    let parentProfile: any;
+    if (normalizedRole === 'PARENT') {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('parents')
+          .insert({
+            user_id: newUser.id,
+            name: normalizedName,
+            phone: normalizedPhone,
+            relationship: normalizedRelationship,
+          })
+          .select('*')
+          .single();
+        if (error) {
+          await supabase.from('users').delete().eq('id', newUser.id);
+          return res.status(500).json({ success: false, message: 'Unable to create parent profile' });
+        }
+        parentProfile = data;
+        const { data: linkedStudents } = await supabase
+          .from('students')
+          .select('id,parent_relationship')
+          .eq('parent_email', normalizedEmail);
+        if (linkedStudents?.length) {
+          const { error: relationError } = await supabase.from('student_parents').upsert(
+            linkedStudents.map((student) => ({
+              student_id: student.id,
+              parent_id: parentProfile.id,
+              relationship: student.parent_relationship || normalizedRelationship,
+            })),
+            { onConflict: 'student_id,parent_id' }
+          );
+          if (relationError) console.warn('[authController] Parent relationship sync failed:', relationError.message);
+        }
+      } else {
+        const linkedStudents = dbStore.students.filter(
+          (student) => (student.parentEmail || '').trim().toLowerCase() === normalizedEmail
+        );
+        parentProfile = {
+          id: newUser.id,
+          user_id: newUser.id,
+          name: normalizedName,
+          phone: normalizedPhone,
+          relationship: normalizedRelationship,
+          email: normalizedEmail,
+          studentIds: linkedStudents.map((student) => student.id),
+          studentId: linkedStudents[0]?.id,
+          studentName: linkedStudents[0]?.name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        dbStore.parents.push(parentProfile);
+      }
+    }
+
+    const linkedStudentIds = normalizedRole === 'PARENT'
+      ? await getParentStudentIds(newUser.id, newUser.email)
+      : undefined;
 
     res.status(201).json({
       success: true,
-      data: formatUserResponse(newUser),
+      data: formatUserResponse(newUser, parentProfile, linkedStudentIds),
       message: 'User registered successfully',
     });
   } catch (err: any) {

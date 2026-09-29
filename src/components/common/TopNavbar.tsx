@@ -1,19 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useERPData } from '../../context/ERPDataContext';
+import { useToast } from '../../context/ToastContext';
 import { notificationService } from '../../services/notificationService';
-import { NotificationItem, UserRole } from '../../types';
+import { NotificationItem } from '../../types';
 import {
   Bell,
   Calendar,
   Sparkles,
   LogOut,
-  UserCheck,
-  GraduationCap,
-  Users,
-  Shield,
-  Check,
-  Clock
+  Clock,
+  UserRound,
+  ImagePlus,
+  Users
 } from 'lucide-react';
 
 interface TopNavbarProps {
@@ -21,20 +20,45 @@ interface TopNavbarProps {
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateTab }) => {
-  const { currentUser, role, switchRole, logout } = useAuth();
-  const { selectedDate, setSelectedDate, anomalies, requests, runAiAnomalyScan } = useERPData();
+  const { currentUser, role, logout, updateProfilePhoto } = useAuth();
+  const { success } = useToast();
+  const {
+    selectedDate,
+    setSelectedDate,
+    runAiAnomalyScan,
+    students,
+    selectedParentStudentId,
+    setSelectedParentStudentId
+  } = useERPData();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState('');
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    notificationService.syncFromBackend();
     const unsub = notificationService.subscribe((items) => {
-      setNotifications(items.filter((n) => n.targetRole === 'all' || n.targetRole === role));
+      setNotifications(notificationService.getNotificationsForRole(role, currentUser?.id));
     });
     return unsub;
-  }, [role]);
+  }, [currentUser?.id, role]);
+
+  useEffect(() => {
+    if (!selectedPhoto) {
+      setPhotoPreviewUrl(null);
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(selectedPhoto);
+    setPhotoPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [selectedPhoto]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -55,11 +79,49 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateTab }) => {
     notificationService.markAllAsRead(role, currentUser?.id);
   };
 
-  const handleRoleToggle = (targetRole: UserRole) => {
-    switchRole(targetRole);
-    if (onNavigateTab) {
-      onNavigateTab('dashboard');
+  const handlePhotoSelected = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setSelectedPhoto(null);
+      setPhotoError('Choose a JPG, JPEG, or PNG image.');
+      return;
     }
+    if (file.size > 2 * 1024 * 1024) {
+      setSelectedPhoto(null);
+      setPhotoError('Profile photos must be 2 MB or smaller.');
+      return;
+    }
+
+    setPhotoError('');
+    setSelectedPhoto(file);
+  };
+
+  const handleSavePhoto = async () => {
+    if (!selectedPhoto) return;
+    setIsSavingPhoto(true);
+    const result = await updateProfilePhoto(selectedPhoto);
+    setIsSavingPhoto(false);
+    if (!result.success) {
+      setPhotoError(result.message || 'Unable to update your profile photo.');
+      return;
+    }
+    setSelectedPhoto(null);
+    setPhotoError('');
+    success('Profile photo updated');
+  };
+
+  const renderAvatar = (size: string, imageClass = '') => {
+    const src = photoPreviewUrl || currentUser?.avatar;
+    return src ? (
+      <img src={src} alt={`${currentUser?.name || 'User'} profile`} className={`${size} rounded-full object-cover ${imageClass}`} />
+    ) : (
+      <span className={`${size} rounded-full bg-slate-100 text-slate-500 flex items-center justify-center ${imageClass}`}>
+        <UserRound className="w-1/2 h-1/2" />
+      </span>
+    );
   };
 
   return (
@@ -85,53 +147,27 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateTab }) => {
           <Sparkles className="w-3.5 h-3.5 text-purple-600" />
           <span>AI Scan</span>
         </button>
+        {role === 'parent' && students.length > 1 && (
+          <label className="flex items-center gap-2 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200/60 text-xs font-semibold text-slate-700">
+            <Users className="w-3.5 h-3.5 text-sky-600" />
+            <span className="hidden sm:inline">My Children</span>
+            <select
+              aria-label="My Children"
+              value={selectedParentStudentId || ''}
+              onChange={(event) => setSelectedParentStudentId(event.target.value || null)}
+              className="max-w-36 bg-transparent font-medium text-slate-800 focus:outline-hidden text-xs cursor-pointer"
+            >
+              {students.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name} • {student.rollNumber}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
-      {/* Zone 2: Center - Fast Role Toggler */}
-      <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
-        <button
-          onClick={() => handleRoleToggle('principal')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            role === 'principal'
-              ? 'bg-white text-indigo-700 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Shield className="w-3.5 h-3.5 text-indigo-600" />
-          <span className="hidden sm:inline">Principal</span>
-          {requests.filter((r) => r.status === 'pending').length > 0 && (
-            <span className="w-4 h-4 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center font-bold">
-              {requests.filter((r) => r.status === 'pending').length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => handleRoleToggle('teacher')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            role === 'teacher'
-              ? 'bg-white text-emerald-700 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <GraduationCap className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="hidden sm:inline">Teacher</span>
-        </button>
-
-        <button
-          onClick={() => handleRoleToggle('parent')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-            role === 'parent'
-              ? 'bg-white text-sky-700 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-sky-600" />
-          <span className="hidden sm:inline">Parent</span>
-        </button>
-      </div>
-
-      {/* Zone 3: Right - Notifications & User Profile */}
+      {/* Zone 2: Right - Notifications & User Profile */}
       <div className="flex items-center gap-3">
         {/* Notifications Popover */}
         <div className="relative" ref={notifRef}>
@@ -212,80 +248,78 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ onNavigateTab }) => {
             onClick={() => setShowUserMenu(!showUserMenu)}
             className="flex items-center gap-2 p-1.5 hover:bg-slate-100 rounded-xl transition-all"
           >
-            <img
-              src={currentUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'}
-              alt={currentUser?.name}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-indigo-500/20"
-            />
+            {renderAvatar('w-8 h-8', 'ring-2 ring-indigo-500/20')}
             <div className="hidden md:block text-left pr-1">
-              <p className="text-xs font-bold text-slate-800 leading-none">{currentUser?.name}</p>
-              <p className="text-[10px] font-medium text-slate-500 mt-0.5 capitalize">{currentUser?.role}</p>
+              <p className="text-xs font-bold text-slate-800 leading-none">{currentUser?.name || 'Account'}</p>
+              <p className="text-[10px] font-medium text-slate-500 mt-0.5 capitalize">{role}</p>
             </div>
           </button>
 
           {showUserMenu && (
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                <p className="text-xs font-bold text-slate-900">{currentUser?.name}</p>
-                <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
-                <span className="inline-block mt-2 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
-                  {currentUser?.designation || currentUser?.role}
-                </span>
+            <div className="absolute right-0 mt-2 w-72 max-h-[80vh] overflow-y-auto bg-white rounded-2xl shadow-xl border border-slate-200 z-50 animate-in fade-in zoom-in-95">
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                {renderAvatar('w-12 h-12', 'shrink-0')}
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">{currentUser?.name || 'Account'}</p>
+                  <p className="text-[11px] text-slate-500 truncate">{currentUser?.email}</p>
+                  <span className="inline-block mt-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider bg-indigo-100 text-indigo-700">
+                    {currentUser?.designation || role}
+                  </span>
+                </div>
               </div>
 
-              <div className="p-2 space-y-1">
-                <p className="px-2 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                  Switch Active Persona
-                </p>
-                <button
-                  onClick={() => {
-                    handleRoleToggle('principal');
-                    setShowUserMenu(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-left font-medium ${
-                    role === 'principal' ? 'bg-indigo-50 text-indigo-700 font-bold' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-indigo-600" /> Dr. Ramesh (Principal)
-                  </span>
-                  {role === 'principal' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                </button>
-
-                <button
-                  onClick={() => {
-                    handleRoleToggle('teacher');
-                    setShowUserMenu(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-left font-medium ${
-                    role === 'teacher' ? 'bg-emerald-50 text-emerald-700 font-bold' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <GraduationCap className="w-3.5 h-3.5 text-emerald-600" /> Prof. Anitha (Faculty)
-                  </span>
-                  {role === 'teacher' && <Check className="w-3.5 h-3.5 text-emerald-600" />}
-                </button>
-
-                <button
-                  onClick={() => {
-                    handleRoleToggle('parent');
-                    setShowUserMenu(false);
-                  }}
-                  className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg text-left font-medium ${
-                    role === 'parent' ? 'bg-sky-50 text-sky-700 font-bold' : 'hover:bg-slate-50'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-sky-600" /> Suresh Kumar (Parent)
-                  </span>
-                  {role === 'parent' && <Check className="w-3.5 h-3.5 text-sky-600" />}
-                </button>
+              <div className="p-3 border-b border-slate-100">
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                  onChange={handlePhotoSelected}
+                  className="hidden"
+                />
+                {selectedPhoto && photoPreviewUrl ? (
+                  <div className="flex items-center gap-3">
+                    <img src={photoPreviewUrl} alt="Profile photo preview" className="w-12 h-12 rounded-full object-cover" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-slate-700">Preview photo</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <button
+                          type="button"
+                          onClick={handleSavePhoto}
+                          disabled={isSavingPhoto}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
+                        >
+                          {isSavingPhoto ? 'Saving...' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedPhoto(null); setPhotoError(''); }}
+                          className="text-xs font-medium text-slate-500 hover:text-slate-800"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setPhotoError(''); photoInputRef.current?.click(); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg text-left font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <ImagePlus className="w-4 h-4 text-indigo-600" />
+                    Change Profile Photo
+                  </button>
+                )}
+                <p className="text-[10px] text-slate-400 mt-2">JPG, JPEG or PNG; maximum 2 MB.</p>
+                {photoError && <p role="alert" className="text-[11px] text-rose-600 mt-2">{photoError}</p>}
               </div>
 
-              <div className="p-2 border-t border-slate-100">
+              <div className="p-2">
                 <button
-                  onClick={() => logout()}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    logout();
+                  }}
                   className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-lg font-bold transition-colors"
                 >
                   <LogOut className="w-3.5 h-3.5" />

@@ -36,6 +36,7 @@ import { ParentMarks } from './pages/parent/ParentMarks';
 import { ParentProgress } from './pages/parent/ParentProgress';
 import { ParentNotifications } from './pages/parent/ParentNotifications';
 import { ParentProfile } from './pages/parent/ParentProfile';
+import { ParentRequests } from './pages/parent/ParentRequests';
 
 const AppContent: React.FC = () => {
   const { isAuthenticated, role } = useAuth();
@@ -100,6 +101,8 @@ const AppContent: React.FC = () => {
           return <ParentMarks />;
         case 'progress':
           return <ParentProgress />;
+        case 'requests':
+          return <ParentRequests />;
         case 'notifications':
           return <ParentNotifications />;
         case 'profile':

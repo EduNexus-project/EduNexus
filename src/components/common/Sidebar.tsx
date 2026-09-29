@@ -84,6 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'attendance', label: 'Attendance Ledger', icon: CalendarCheck2 },
     { id: 'marks', label: 'Semester Grades', icon: Award },
     { id: 'progress', label: 'AI Cognitive Digest', icon: Sparkles, badge: 'AI', badgeColor: 'bg-purple-600' },
+    { id: 'requests', label: 'Requests', icon: FileCheck2 },
     { id: 'notifications', label: 'Institutional Notices', icon: Bell },
     { id: 'profile', label: 'Student Profile', icon: User }
   ];

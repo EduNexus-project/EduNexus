@@ -59,7 +59,7 @@ export interface StudentMarkReport {
 class InMemoryERPDatabase {
   users: User[] = [];
   teachers: (Teacher & { email?: string; avatar?: string; assignedClasses?: string[]; subjectsTaught?: string[] })[] = [];
-  parents: (Parent & { email?: string; avatar?: string; studentId?: string; studentName?: string })[] = [];
+  parents: (Parent & { email?: string; avatar?: string; relationship?: 'father' | 'mother' | 'guardian'; studentIds?: string[]; studentId?: string; studentName?: string })[] = [];
   students: any[] = [];
   classes: any[] = [];
   subjects: Subject[] = [];

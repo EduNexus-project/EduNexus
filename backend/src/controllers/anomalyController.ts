@@ -1,13 +1,24 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../types';
 import { dbStore } from '../services/dbStore';
 import { computeStudentAttendanceStats } from './attendanceController';
 import { createAuditLog } from '../utils/auditLogger';
+import { getParentStudentIds, parentCanAccessStudent } from '../services/parentRelationships';
 
 // GET /api/anomalies
-export const getAnomalies = async (req: Request, res: Response) => {
+export const getAnomalies = async (req: AuthRequest, res: Response) => {
   try {
     const { status, studentId } = req.query;
     let anomalies = dbStore.anomalies;
+
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (req.user.role === 'PARENT') {
+      const linkedStudentIds = await getParentStudentIds(req.user.id, req.user.email);
+      if (studentId && !linkedStudentIds.includes(String(studentId))) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+      anomalies = anomalies.filter((anomaly) => linkedStudentIds.includes(anomaly.studentId));
+    }
 
     if (status) anomalies = anomalies.filter(a => a.status === status);
     if (studentId) anomalies = anomalies.filter(a => a.studentId === studentId);
@@ -23,9 +34,13 @@ export const getAnomalies = async (req: Request, res: Response) => {
 };
 
 // GET /api/anomalies/student/:studentId
-export const getStudentAnomalies = async (req: Request, res: Response) => {
+export const getStudentAnomalies = async (req: AuthRequest, res: Response) => {
   try {
     const studentId = req.params.studentId as string;
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!(await parentCanAccessStudent(req, studentId))) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
     const anomalies = dbStore.anomalies.filter(a => a.studentId === studentId);
     res.json({ success: true, data: anomalies });
   } catch (err: any) {
@@ -34,7 +49,7 @@ export const getStudentAnomalies = async (req: Request, res: Response) => {
 };
 
 // PATCH /api/anomalies/:id
-export const updateAnomalyStatus = async (req: Request, res: Response) => {
+export const updateAnomalyStatus = async (req: AuthRequest, res: Response) => {
   try {
     const id = req.params.id as string;
     const { status, reviewerName, notes } = req.body;
@@ -48,12 +63,12 @@ export const updateAnomalyStatus = async (req: Request, res: Response) => {
     dbStore.anomalies[idx] = {
       ...dbStore.anomalies[idx],
       status: status || dbStore.anomalies[idx].status,
-      reviewedBy: reviewerName || 'Dr. Ramesh Sundaram (Principal)',
+      reviewedBy: req.user?.name || reviewerName || 'Authorized reviewer',
       reviewNotes: notes || dbStore.anomalies[idx].reviewNotes,
     };
 
     await createAuditLog({
-      user_id: (req as any).user?.id || 'principal',
+      user_id: req.user?.id || null,
       action: 'UPDATE_ANOMALY_STATUS',
       entity_type: 'ANOMALY',
       entity_id: id,

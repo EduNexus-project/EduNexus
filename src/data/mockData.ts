@@ -7,44 +7,8 @@ import {
   StudentMarkReport,
   CampusBlockHeatmap,
   NotificationItem,
-  User,
   AttendanceRecord
 } from '../types';
-
-export const DEMO_USERS: Record<string, User> = {
-  principal: {
-    id: 'usr_principal_01',
-    name: 'Dr. Ramesh Sundaram',
-    email: 'principal@edunexus.edu',
-    role: 'principal',
-    designation: 'Principal & Dean of Academics',
-    department: 'Administrative Directorate',
-    phone: '+91 98410 11223',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
-  },
-  teacher: {
-    id: 'usr_teacher_01',
-    name: 'Prof. Anitha Vasudevan',
-    email: 'anitha.v@edunexus.edu',
-    role: 'teacher',
-    designation: 'Associate Professor & Class Incharge (CSE-A)',
-    department: 'Computer Science & Engineering',
-    phone: '+91 98402 33445',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-  },
-  parent: {
-    id: 'usr_parent_01',
-    name: 'Suresh Kumar',
-    email: 'suresh.kumar@gmail.com',
-    role: 'parent',
-    designation: 'Parent / Guardian',
-    department: 'Guardian Portal',
-    phone: '+91 98840 55667',
-    studentId: 'std_01',
-    studentName: 'Aarav Kumar',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80'
-  }
-};
 
 export const INITIAL_CLASSES: AcademicClass[] = [
   {

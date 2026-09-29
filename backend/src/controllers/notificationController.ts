@@ -1,20 +1,17 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { dbStore } from '../services/dbStore';
+import { AuthRequest } from '../types';
+
+const canReadNotification = (notification: any, user: NonNullable<AuthRequest['user']>) => {
+  if (notification.targetUserId) return notification.targetUserId === user.id;
+  return notification.targetRole === 'all' || notification.targetRole === user.role.toLowerCase();
+};
 
 // GET /api/notifications
-export const getNotifications = async (req: Request, res: Response) => {
+export const getNotifications = async (req: AuthRequest, res: Response) => {
   try {
-    const { role, userId } = req.query;
-    let items = dbStore.notifications;
-
-    if (role || userId) {
-      items = items.filter(
-        n =>
-          n.targetRole === 'all' ||
-          (role && n.targetRole === role) ||
-          (userId && n.targetUserId === userId)
-      );
-    }
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    const items = dbStore.notifications.filter((notification) => canReadNotification(notification, req.user!));
 
     res.json({
       success: true,
@@ -27,7 +24,7 @@ export const getNotifications = async (req: Request, res: Response) => {
 };
 
 // POST /api/notifications
-export const dispatchNotification = async (req: Request, res: Response) => {
+export const dispatchNotification = async (req: AuthRequest, res: Response) => {
   try {
     const { targetRole, targetUserId, title, message, type, linkAction } = req.body;
     if (!title || !message) {
@@ -55,13 +52,13 @@ export const dispatchNotification = async (req: Request, res: Response) => {
 };
 
 // PATCH /api/notifications/:id/read
-export const markNotificationRead = async (req: Request, res: Response) => {
+export const markNotificationRead = async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const item = dbStore.notifications.find(n => n.id === id);
-    if (item) {
-      item.read = true;
-    }
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    const item = dbStore.notifications.find((notification) => notification.id === id && canReadNotification(notification, req.user!));
+    if (!item) return res.status(404).json({ success: false, message: 'Notification not found' });
+    item.read = true;
     res.json({ success: true, message: 'Notification marked as read' });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
@@ -69,18 +66,11 @@ export const markNotificationRead = async (req: Request, res: Response) => {
 };
 
 // PATCH /api/notifications/read-all
-export const markAllNotificationsRead = async (req: Request, res: Response) => {
+export const markAllNotificationsRead = async (req: AuthRequest, res: Response) => {
   try {
-    const { role, userId } = req.body;
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
     dbStore.notifications.forEach(n => {
-      if (
-        !role ||
-        n.targetRole === 'all' ||
-        n.targetRole === role ||
-        (userId && n.targetUserId === userId)
-      ) {
-        n.read = true;
-      }
+      if (canReadNotification(n, req.user!)) n.read = true;
     });
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (err: any) {

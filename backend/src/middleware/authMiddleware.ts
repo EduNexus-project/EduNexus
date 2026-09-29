@@ -10,7 +10,6 @@ const getJwtSecret = () => process.env.JWT_SECRET || 'edunexus-super-secret-jwt-
 
 export const protect = (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
-  const xUserId = (req.headers['x-user-id'] as string) || (req.query.userId as string);
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.split(' ')[1];
@@ -29,25 +28,10 @@ export const protect = (req: AuthRequest, res: Response, next: NextFunction) => 
       };
       return next();
     } catch {
-      // If token expired or invalid, check if x-user-id is provided as fallback
+      return res.status(401).json({ success: false, message: 'Not authorized, no valid session token provided' });
     }
   }
 
-  // Graceful fallback for seamless local/demo mode
-  if (xUserId) {
-    const user = dbStore.users.find(u => u.id === xUserId || u.role.toLowerCase() === xUserId.toLowerCase());
-    if (user) {
-      req.user = {
-        id: user.id,
-        email: user.email,
-        role: user.role.toUpperCase() as UserRole,
-        name: user.name,
-      };
-      return next();
-    }
-  }
-
-  // If no auth provided at all
   return res.status(401).json({ success: false, message: 'Not authorized, no valid session token provided' });
 };
 

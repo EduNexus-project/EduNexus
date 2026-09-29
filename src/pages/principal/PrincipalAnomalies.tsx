@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useERPData } from '../../context/ERPDataContext';
+import { useAuth } from '../../context/AuthContext';
 import { AnomalyAlert } from '../../components/ai/AnomalyAlert';
 import { Sparkles, Filter, ShieldAlert, CheckCircle2, RotateCw } from 'lucide-react';
 import { AnomalyType } from '../../types';
 
 export const PrincipalAnomalies: React.FC = () => {
+  const { currentUser } = useAuth();
   const { anomalies, reviewAnomaly, runAiAnomalyScan } = useERPData();
   const [filterType, setFilterType] = useState<string>('all');
   const [filterRisk, setFilterRisk] = useState<string>('all');
@@ -157,7 +159,7 @@ export const PrincipalAnomalies: React.FC = () => {
             <AnomalyAlert
               key={anomaly.id}
               anomaly={anomaly}
-              onReview={(id, status, notes) => reviewAnomaly(id, status, 'Dr. Ramesh Sundaram', notes)}
+              onReview={(id, status, notes) => reviewAnomaly(id, status, currentUser?.name || 'Current user', notes)}
             />
           ))
         )}

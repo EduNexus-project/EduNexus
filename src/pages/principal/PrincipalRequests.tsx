@@ -38,7 +38,7 @@ export const PrincipalRequests: React.FC = () => {
     reviewModificationRequest(
       selectedRequest.request.id,
       selectedRequest.action,
-      currentUser?.name || 'Dr. Ramesh Sundaram',
+      currentUser?.name || 'Current user',
       remarks
     );
     setSelectedRequest(null);

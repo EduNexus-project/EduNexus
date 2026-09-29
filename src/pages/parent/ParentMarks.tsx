@@ -1,13 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useERPData } from '../../context/ERPDataContext';
-import { useAuth } from '../../context/AuthContext';
 import { Award, CheckCircle2, ShieldCheck, Download, Printer } from 'lucide-react';
+import { ParentStudentUnavailable } from './ParentStudentUnavailable';
+import { StudentMarkReport } from '../../types';
+import { parentService } from '../../services/parentService';
 
 export const ParentMarks: React.FC = () => {
-  const { currentUser } = useAuth();
-  const { students, getStudentMarkReport } = useERPData();
-  const myStudent = students.find((s) => s.id === currentUser?.studentId) || students[0];
-  const report = getStudentMarkReport(myStudent.id);
+  const { students, selectedParentStudentId, parentStudentsLoading } = useERPData();
+  const myStudent = students.find((student) => student.id === selectedParentStudentId) ||
+    (students.length === 1 ? students[0] : undefined);
+  const [reportState, setReportState] = useState<{ studentId: string; report: StudentMarkReport } | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const report = reportState && reportState.studentId === myStudent?.id ? reportState.report : null;
+
+  useEffect(() => {
+    if (!myStudent) {
+      setReportState(null);
+      return;
+    }
+    let active = true;
+    setReportState(null);
+    setLoadError('');
+    parentService.getMarks(myStudent.id)
+      .then((studentReport) => { if (active) setReportState({ studentId: myStudent.id, report: studentReport }); })
+      .catch((error: Error) => { if (active) setLoadError(error.message); });
+    return () => { active = false; };
+  }, [myStudent?.id]);
+
+  if (!myStudent) {
+    return <ParentStudentUnavailable loading={parentStudentsLoading} />;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -37,6 +59,7 @@ export const ParentMarks: React.FC = () => {
       </div>
 
       {/* Transcript Card */}
+      {loadError && <p role="alert" className="text-xs text-rose-600">{loadError}</p>}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
         {/* Institutional Header */}
         <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-4">

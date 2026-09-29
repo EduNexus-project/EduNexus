@@ -1,20 +1,32 @@
-import { User, UserRole } from '../types';
-import { DEMO_USERS } from '../data/mockData';
+import { ParentRelationship, User, UserRole } from '../types';
 
 const AUTH_STORAGE_KEY = 'edunexus_active_user';
 const TOKEN_KEY = 'edunexus_auth_token';
 
+const isUser = (value: unknown): value is User => {
+  if (!value || typeof value !== 'object') return false;
+  const user = value as Partial<User>;
+  return (
+    typeof user.id === 'string' &&
+    typeof user.name === 'string' &&
+    typeof user.email === 'string' &&
+    (user.role === 'principal' || user.role === 'teacher' || user.role === 'parent')
+  );
+};
+
 export const authService = {
-  getCurrentUser(): User {
+  getCurrentUser(): User | null {
     try {
+      if (!this.getToken()) return null;
       const stored = localStorage.getItem(AUTH_STORAGE_KEY);
       if (stored) {
-        return JSON.parse(stored);
+        const user: unknown = JSON.parse(stored);
+        return isUser(user) ? user : null;
       }
     } catch {
-      // Fallback
+      return null;
     }
-    return DEMO_USERS.principal;
+    return null;
   },
 
   getToken(): string | null {
@@ -28,10 +40,8 @@ export const authService = {
   getAuthHeaders(): Record<string, string> {
     const user = this.getCurrentUser();
     const token = this.getToken();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'x-user-id': user.id
-    };
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (user) headers['x-user-id'] = user.id;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
@@ -46,40 +56,88 @@ export const authService = {
     }
   },
 
-  switchRole(role: UserRole): User {
-    const user = DEMO_USERS[role] || DEMO_USERS.principal;
-    this.setCurrentUser(user);
-    // Fire background API call to update server profile session
-    fetch(`/api/auth/me?userId=${user.id}`, {
-      headers: { 'x-user-id': user.id }
-    }).catch(() => {});
-    return user;
-  },
-
-  async login(role: UserRole, password?: string): Promise<{ success: boolean; user: User }> {
-    const fallbackUser = DEMO_USERS[role] || DEMO_USERS.principal;
+  async login(
+    email: string,
+    password: string,
+    role: UserRole
+  ): Promise<{ success: boolean; user?: User; message?: string }> {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: fallbackUser.email, role, password })
+        body: JSON.stringify({ email: email.trim(), role, password })
       });
       const data = await res.json();
-      if (data.success && data.data?.user) {
+      if (res.ok && data.success && isUser(data.data?.user) && typeof data.data?.token === 'string') {
         this.setCurrentUser(data.data.user);
-        if (data.data?.token) {
-          try {
-            localStorage.setItem(TOKEN_KEY, data.data.token);
-          } catch {}
+        try {
+          localStorage.setItem(TOKEN_KEY, data.data.token);
+        } catch {
+          // The active session remains available until the page is reloaded.
         }
         return { success: true, user: data.data.user };
       }
+      return { success: false, message: data.message || 'Unable to sign in with those credentials.' };
     } catch (err) {
-      console.warn('[authService] Backend offline, utilizing local fallback:', err);
+      console.warn('[authService] Backend login failed:', err);
+      return { success: false, message: 'Unable to reach the authentication service. Please try again.' };
     }
+  },
 
-    this.setCurrentUser(fallbackUser);
-    return { success: true, user: fallbackUser };
+  async register(input: {
+    name: string;
+    email: string;
+    password: string;
+    role: UserRole;
+    phone?: string;
+    relationship?: ParentRelationship;
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: input.name.trim(),
+          email: input.email.trim(),
+          password: input.password,
+          role: input.role,
+          phone: input.phone?.trim(),
+          relationship: input.relationship
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        return { success: true, message: data.message || 'Account created successfully.' };
+      }
+      return { success: false, message: data.message || 'Unable to create the account.' };
+    } catch (err) {
+      console.warn('[authService] Backend registration failed:', err);
+      return { success: false, message: 'Unable to reach the registration service. Please try again.' };
+    }
+  },
+
+  async updateProfilePhoto(file: File): Promise<{ success: boolean; user?: User; message?: string }> {
+    const token = this.getToken();
+    if (!token) return { success: false, message: 'Your session has expired. Please sign in again.' };
+
+    try {
+      const res = await fetch('/api/users/me/profile-photo', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': file.type
+        },
+        body: file
+      });
+      const data = await res.json();
+      if (res.ok && data.success && isUser(data.data?.user)) {
+        return { success: true, user: data.data.user };
+      }
+      return { success: false, message: data.message || 'Unable to update your profile photo.' };
+    } catch (err) {
+      console.warn('[authService] Profile photo update failed:', err);
+      return { success: false, message: 'Unable to reach the profile service. Please try again.' };
+    }
   },
 
   logout(): void {
@@ -91,26 +149,4 @@ export const authService = {
     }
   },
 
-  getAvailableRoles(): { role: UserRole; name: string; title: string; email: string }[] {
-    return [
-      {
-        role: 'principal',
-        name: DEMO_USERS.principal.name,
-        title: 'Principal / Institutional Dean',
-        email: DEMO_USERS.principal.email
-      },
-      {
-        role: 'teacher',
-        name: DEMO_USERS.teacher.name,
-        title: 'Faculty / Class Incharge (CSE-A)',
-        email: DEMO_USERS.teacher.email
-      },
-      {
-        role: 'parent',
-        name: DEMO_USERS.parent.name,
-        title: 'Guardian (Parent of Aarav Kumar)',
-        email: DEMO_USERS.parent.email
-      }
-    ];
-  }
 };

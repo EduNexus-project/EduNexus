@@ -1,4 +1,5 @@
 export type UserRole = 'principal' | 'teacher' | 'parent';
+export type ParentRelationship = 'father' | 'mother' | 'guardian';
 
 export interface User {
   id: string;
@@ -9,7 +10,9 @@ export interface User {
   department?: string;
   designation?: string;
   phone?: string;
-  studentId?: string; // For parents linked to student
+  relationship?: ParentRelationship;
+  studentIds?: string[];
+  studentId?: string;
   studentName?: string;
 }
 
@@ -30,9 +33,12 @@ export interface AttendanceRecord {
 
 export interface Student {
   id: string;
+  studentId?: string;
   rollNumber: string;
   name: string;
   email: string;
+  phone?: string;
+  dateOfBirth?: string;
   avatar: string;
   classId: string;
   className: string;
@@ -42,6 +48,7 @@ export interface Student {
   parentName: string;
   parentPhone: string;
   parentEmail: string;
+  parentRelationship?: ParentRelationship;
   fnAttendanceRate: number; // percentage
   anAttendanceRate: number; // percentage
   overallAttendanceRate: number; // percentage

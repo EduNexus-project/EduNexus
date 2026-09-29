@@ -5,13 +5,14 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../controllers/notificationController';
-import { optionalProtect } from '../middleware/authMiddleware';
+import { protect } from '../middleware/authMiddleware';
+import { authorizeRoles } from '../middleware/roleMiddleware';
 
 const router = Router();
 
-router.get('/', optionalProtect, getNotifications);
-router.post('/', optionalProtect, dispatchNotification);
-router.patch('/read-all', optionalProtect, markAllNotificationsRead);
-router.patch('/:id/read', optionalProtect, markNotificationRead);
+router.get('/', protect, getNotifications);
+router.post('/', protect, authorizeRoles('PRINCIPAL', 'TEACHER'), dispatchNotification);
+router.patch('/read-all', protect, markAllNotificationsRead);
+router.patch('/:id/read', protect, markNotificationRead);
 
 export default router;

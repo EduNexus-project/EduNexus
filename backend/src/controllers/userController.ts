@@ -78,6 +78,77 @@ export const updateUser = async (req: AuthRequest, res: Response) => {
   }
 };
 
+// PUT /api/users/me/profile-photo
+export const updateProfilePhoto = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Not authenticated' });
+    }
+
+    const contentType = (req.headers['content-type'] || '').split(';')[0].toLowerCase();
+    if (!['image/jpeg', 'image/png'].includes(contentType)) {
+      return res.status(415).json({ success: false, message: 'Upload a JPG, JPEG, or PNG image' });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ success: false, message: 'An image file is required' });
+    }
+    if (req.body.length > 2 * 1024 * 1024) {
+      return res.status(413).json({ success: false, message: 'Profile photos must be 2 MB or smaller' });
+    }
+
+    const isJpeg = contentType === 'image/jpeg' &&
+      req.body.length >= 3 &&
+      req.body[0] === 0xff && req.body[1] === 0xd8 && req.body[2] === 0xff;
+    const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const isPng = contentType === 'image/png' &&
+      req.body.length >= pngSignature.length &&
+      req.body.subarray(0, pngSignature.length).equals(pngSignature);
+
+    if (!isJpeg && !isPng) {
+      return res.status(400).json({ success: false, message: 'The uploaded file is not a valid JPG or PNG image' });
+    }
+
+    const avatar = `data:${contentType};base64,${req.body.toString('base64')}`;
+    let user: any;
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ avatar, updated_at: new Date().toISOString() })
+        .eq('id', req.user.id)
+        .select('id,email,role,name,avatar')
+        .single();
+      if (error) {
+        return res.status(500).json({ success: false, message: 'Unable to save profile photo' });
+      }
+      user = data;
+    } else {
+      user = dbStore.users.find((storedUser) => storedUser.id === req.user?.id);
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      user.avatar = avatar;
+      user.updated_at = new Date().toISOString();
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile photo updated',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role.toLowerCase(),
+          avatar: user.avatar,
+        },
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // DELETE /api/users/:id
 export const deleteUser = async (req: AuthRequest, res: Response) => {
   try {

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Settings, ShieldCheck, Clock, Sliders, Bell, Database, Key } from 'lucide-react';
 
 export const PrincipalSettings: React.FC = () => {
+  const { currentUser } = useAuth();
   const { success } = useToast();
   const [fnStartTime, setFnStartTime] = useState('09:00');
   const [fnEndTime, setFnEndTime] = useState('12:45');
@@ -167,12 +169,12 @@ export const PrincipalSettings: React.FC = () => {
             <h3 className="text-sm font-bold">Principal Digital Signature Token</h3>
           </div>
           <p className="text-xs text-slate-500 leading-relaxed">
-            Institutional cryptographic sign-off is active for Dr. Ramesh Sundaram (Dean of Academics).
+            Institutional cryptographic sign-off is active for {currentUser?.name || 'the signed-in Principal'}.
             All approved teacher modification appeals are anchored to institutional immutable audit registers.
           </p>
           <div className="flex items-center gap-2 text-xs font-mono text-emerald-700 bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100 w-fit">
             <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Digital Cert: NEXUS-SIGN-2026-RS9948 • Status: Active & Valid</span>
+            <span>Digital Cert: Status Active &amp; Valid</span>
           </div>
         </div>
 

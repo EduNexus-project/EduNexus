@@ -1,12 +1,18 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../types';
 import { dbStore } from '../services/dbStore';
 import { computeStudentAttendanceStats } from './attendanceController';
 import { computeAISafetyAssessment } from './requestController';
+import { parentCanAccessStudent } from '../services/parentRelationships';
 
 // GET /api/ai/progress-summary/:studentId
-export const getStudentProgressSummary = async (req: Request, res: Response) => {
+export const getStudentProgressSummary = async (req: AuthRequest, res: Response) => {
   try {
     const studentId = req.params.studentId as string;
+    if (!req.user) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    if (!(await parentCanAccessStudent(req, studentId))) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
     const student = dbStore.students.find(s => s.id === studentId);
     if (!student) {
       return res.status(404).json({ success: false, message: 'Student not found' });
@@ -112,7 +118,7 @@ export const getStudentProgressSummary = async (req: Request, res: Response) => 
 };
 
 // POST /api/ai/parent-digest
-export const generateParentDigest = async (req: Request, res: Response) => {
+export const generateParentDigest = async (req: AuthRequest, res: Response) => {
   try {
     const { studentId } = req.body;
     if (studentId) {
@@ -126,7 +132,7 @@ export const generateParentDigest = async (req: Request, res: Response) => {
 };
 
 // POST /api/ai/assess-request
-export const assessRequestSafety = async (req: Request, res: Response) => {
+export const assessRequestSafety = async (req: AuthRequest, res: Response) => {
   try {
     const { reason, requestType } = req.body;
     if (!reason) {

@@ -10,7 +10,6 @@ class NotificationService {
 
   constructor() {
     this.init();
-    this.syncFromBackend();
   }
 
   private init() {
@@ -22,11 +21,12 @@ class NotificationService {
     }
   }
 
-  private async syncFromBackend() {
+  async syncFromBackend() {
     try {
-      const res = await fetch('/api/notifications');
+      const res = await fetch('/api/notifications', { headers: authService.getAuthHeaders() });
+      if (!res.ok) return;
       const data = await res.json();
-      if (data.success && Array.isArray(data.data?.notifications) && data.data.notifications.length > 0) {
+      if (data.success && Array.isArray(data.data?.notifications)) {
         this.notifications = data.data.notifications;
         this.save();
       }
@@ -53,12 +53,10 @@ class NotificationService {
   }
 
   getNotificationsForRole(role: UserRole, userId?: string): NotificationItem[] {
-    return this.notifications.filter(
-      (n) =>
-        n.targetRole === 'all' ||
-        n.targetRole === role ||
-        (userId && n.targetUserId === userId)
-    );
+    return this.notifications.filter((notification) => {
+      if (notification.targetUserId) return notification.targetUserId === userId;
+      return notification.targetRole === 'all' || notification.targetRole === role;
+    });
   }
 
   getUnreadCount(role: UserRole, userId?: string): number {
@@ -79,11 +77,7 @@ class NotificationService {
 
   markAllAsRead(role: UserRole, userId?: string): void {
     this.notifications.forEach((n) => {
-      if (
-        n.targetRole === 'all' ||
-        n.targetRole === role ||
-        (userId && n.targetUserId === userId)
-      ) {
+      if (n.targetUserId ? n.targetUserId === userId : n.targetRole === 'all' || n.targetRole === role) {
         n.read = true;
         fetch(`/api/notifications/${n.id}/read`, {
           method: 'PATCH',
