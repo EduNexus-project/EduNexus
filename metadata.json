@@ -1,0 +1,6 @@
+{
+  "name": "Parallel ERP AI Suite",
+  "description": "AI-Augmented Parallel ERP with dual Groq & Gemini LLM engine, AI Approval Scoring Assistant, Natural Language Summary Engine, and Supabase integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

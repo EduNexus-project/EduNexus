@@ -1,0 +1,100 @@
+{
+  "profiles": [
+    {
+      "id": "usr-principal-6q8k6u",
+      "name": "Dr. Sujith Kumar",
+      "email": "sujith.principal@sht.edu",
+      "password": "adminpassword123",
+      "role": "principal",
+      "phone": "",
+      "department": "Administration",
+      "school_name": "Sakith Harvan Technologies Institute",
+      "created_at": "2026-10-15T08:48:17.424Z"
+    }
+  ],
+  "classes": [
+    {
+      "id": "cls-30bis2",
+      "code": "CS-10A",
+      "name": "Computer Science (Section A)",
+      "department": "Computer Science & AI",
+      "section": "A",
+      "academic_year": "2026-2027",
+      "total_students": 1
+    }
+  ],
+  "students": [
+    {
+      "id": "stu-wnn1d1v",
+      "student_id": "STU-2546",
+      "student_name": "Sujith Sai Sankar",
+      "roll_no": 101,
+      "class_id": "cls-30bis2",
+      "class_name": "Computer Science (Section A)",
+      "parent_id": "usr-parent-a1juz",
+      "parent_name": "V. Sai",
+      "parent_phone": "+1-555-0999",
+      "parent_channel": "WhatsApp",
+      "created_at": "2026-10-15T08:48:52.398Z"
+    }
+  ],
+  "subjects": [],
+  "examinations": [],
+  "marks": [],
+  "attendance": [],
+  "correctionRequests": [],
+  "anomalyAlerts": [],
+  "notifications": [],
+  "auditLogs": [
+    {
+      "id": "aud-me4ttwq",
+      "actor_name": "Administrator",
+      "actor_role": "principal",
+      "action": "STUDENT_UPDATED",
+      "target_type": "students",
+      "target_id": "stu-wnn1d1v",
+      "details": "Updated details for student ID STU-2546. Exact name is now: \"Sujith Sai Sankar\".",
+      "timestamp": "2026-10-15T08:50:07.029Z"
+    },
+    {
+      "id": "aud-wclckqi",
+      "actor_name": "Principal Office",
+      "actor_role": "principal",
+      "action": "STUDENT_ENROLLED",
+      "target_type": "students",
+      "target_id": "stu-wnn1d1v",
+      "details": "Enrolled student with exact name: \"Sujith Sai\" (ID: STU-2546) in class Computer Science (Section A).",
+      "timestamp": "2026-10-15T08:48:52.398Z"
+    },
+    {
+      "id": "aud-q0ip2x2",
+      "actor_name": "Principal Office",
+      "actor_role": "principal",
+      "action": "CLASS_CREATED",
+      "target_type": "classes",
+      "target_id": "cls-30bis2",
+      "details": "Created new institutional class: CS-10A - \"Computer Science (Section A)\".",
+      "timestamp": "2026-10-15T08:48:39.546Z"
+    },
+    {
+      "id": "aud-2ysxx58",
+      "actor_name": "Dr. Sujith Kumar",
+      "actor_role": "principal",
+      "action": "USER_LOGIN",
+      "target_type": "profiles",
+      "target_id": "usr-principal-6q8k6u",
+      "details": "Authenticated user \"Dr. Sujith Kumar\" with role \"principal\".",
+      "timestamp": "2026-10-15T08:48:32.885Z"
+    },
+    {
+      "id": "aud-84drkse",
+      "actor_name": "Dr. Sujith Kumar",
+      "actor_role": "principal",
+      "action": "USER_REGISTERED",
+      "target_type": "profiles",
+      "target_id": "usr-principal-6q8k6u",
+      "details": "User registered with role: principal and exact name: \"Dr. Sujith Kumar\".",
+      "timestamp": "2026-10-15T08:48:17.424Z"
+    }
+  ]
+}
